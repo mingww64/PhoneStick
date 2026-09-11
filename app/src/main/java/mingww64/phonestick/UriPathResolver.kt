@@ -8,7 +8,6 @@ import android.provider.DocumentsContract
 import android.provider.MediaStore
 import android.util.Log
 import java.io.File
-import java.io.FileOutputStream
 
 object UriPathResolver {
     private const val TAG = "UriPathResolver"
@@ -163,19 +162,41 @@ object UriPathResolver {
             }
 
             val targetFile = File(context.filesDir, fileName)
-            Log.i(TAG, "Copying SAF URI to internal storage cache: ${targetFile.absolutePath}")
+            val tempFile = File(context.filesDir, "$fileName.tmp")
 
+            Log.i(TAG, "Copying SAF URI to internal storage: ${targetFile.absolutePath}")
+
+            // Write to a temp file first so we never leave a 0-byte stub if the copy fails
+            tempFile.delete() // clean up any previous failed attempt
             context.contentResolver.openInputStream(uri)?.use { input ->
-                FileOutputStream(targetFile).use { output ->
+                tempFile.outputStream().use { output ->
                     input.copyTo(output)
                 }
             }
-            if (targetFile.exists() && targetFile.length() > 0) {
-                return targetFile.absolutePath
+
+            if (tempFile.exists() && tempFile.length() > 0) {
+                // Atomic rename: replace target with the fully-written temp file
+                if (targetFile.exists()) targetFile.delete()
+                if (tempFile.renameTo(targetFile)) {
+                    return targetFile.absolutePath
+                }
+                // renameTo failed (e.g. cross-device) — fall back to copy + delete
+                tempFile.copyTo(targetFile, overwrite = true)
+                tempFile.delete()
+                if (targetFile.exists() && targetFile.length() > 0) {
+                    return targetFile.absolutePath
+                }
+            } else {
+                // Stream was empty or openInputStream returned null
+                tempFile.delete()
+                Log.e(TAG, "SAF URI copy produced empty file, aborting")
             }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to copy SAF URI: ${e.message}", e)
+            // Clean up any partial temp file
+            File(context.filesDir, "${Uri.decode(uri.toString()).substringAfterLast('/')}.tmp").delete()
         }
         return uri.toString()
     }
 }
+

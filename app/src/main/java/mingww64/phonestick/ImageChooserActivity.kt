@@ -7,6 +7,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.view.View
 import android.widget.Toast
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
@@ -69,6 +70,16 @@ class ImageChooserActivity : AppCompatActivity() {
         currentlySelectedPath = intent.getStringExtra("selected_path") ?: ""
 
         binding.toolbar.setNavigationOnClickListener { finishWithResult() }
+
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (isFormatSelectionMode) {
+                    exitFormatSelectionMode()
+                } else {
+                    finishWithResult()
+                }
+            }
+        })
 
         setupNotificationChannel()
         setupSpeedDial()
@@ -772,12 +783,4 @@ class ImageChooserActivity : AppCompatActivity() {
         finish()
     }
 
-    @Deprecated("Deprecated in Java")
-    override fun onBackPressed() {
-        if (isFormatSelectionMode) {
-            exitFormatSelectionMode()
-        } else {
-            finishWithResult()
-        }
-    }
 }
